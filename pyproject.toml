@@ -1,0 +1,17 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "snc-cli"
+version = "0.1.0"
+description = "Studio Northern Construction – equipment tracking CLI"
+requires-python = ">=3.10"
+dependencies = [
+    "typer>=0.9,<1",
+    "supabase>=2,<3",
+    "pydantic>=2,<3",
+]
+
+[project.scripts]
+snc = "snc_cli.main:app"
