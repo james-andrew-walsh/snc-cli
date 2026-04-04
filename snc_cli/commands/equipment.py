@@ -51,6 +51,7 @@ def create_equipment(
     serial_number: Optional[str] = typer.Option(None, "--serial-number", help="Serial number"),
     gps_device_tag: Optional[str] = typer.Option(None, "--gps-device-tag", help="GPS device tag"),
     is_rental: bool = typer.Option(False, "--is-rental", help="Mark as rental"),
+    is_active: bool = typer.Option(True, "--is-active", help="Mark as active"),
     human: bool = typer.Option(False, "--human", help="Human-readable output"),
 ) -> None:
     """Create a new equipment record."""
@@ -61,7 +62,7 @@ def create_equipment(
         "model": model,
         "year": year,
         "isRental": is_rental,
-        "isActive": True,
+        "isActive": is_active,
     }
     if description is not None:
         payload["description"] = description

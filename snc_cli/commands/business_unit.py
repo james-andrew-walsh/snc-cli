@@ -31,3 +31,20 @@ def get_business_unit(
     if not resp.data:
         abort(f"Business unit ID {id} not found. Ensure the ID is a valid UUID.")
     output(resp.data[0], human, title="Business Unit")
+
+
+@app.command("create")
+def create_business_unit(
+    code: str = typer.Option(..., "--code", help="Business unit code"),
+    description: str = typer.Option(..., "--description", help="Business unit description"),
+    human: bool = typer.Option(False, "--human", help="Human-readable output"),
+) -> None:
+    """Create a new business unit."""
+    payload = {
+        "code": code,
+        "description": description,
+    }
+    resp = get_client().table("BusinessUnit").upsert(payload, on_conflict="code").execute()
+    if not resp.data:
+        abort("Failed to create business unit.")
+    output(resp.data[0], human, title="Business Unit Created")
