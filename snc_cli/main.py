@@ -1,4 +1,4 @@
-"""SNC CLI – Studio Northern Construction equipment tracking."""
+"""snc – Sierra Nevada Construction equipment tracking."""
 
 import typer
 
@@ -6,7 +6,7 @@ from snc_cli.commands import business_unit, equipment, job, location, telemetry
 
 app = typer.Typer(
     name="snc",
-    help="Studio Northern Construction – equipment tracking CLI.",
+    help="Sierra Nevada Construction – equipment tracking CLI.",
     no_args_is_help=True,
 )
 

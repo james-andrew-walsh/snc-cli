@@ -1,6 +1,6 @@
-# snc – Studio Northern Construction CLI
+# snc – Sierra Nevada Construction CLI
 
-Equipment tracking CLI for Studio Northern Construction.
+Equipment tracking CLI for Sierra Nevada Construction.
 
 ## Install
 
