@@ -8,6 +8,17 @@ Equipment tracking CLI for Sierra Nevada Construction.
 pip install -e .
 ```
 
+## Configuration
+
+Set environment variables before use:
+
+```bash
+export SUPABASE_URL="https://your-project.supabase.co"
+export SUPABASE_KEY="your-service-role-key"
+```
+
+Never hardcode credentials in code or scripts.
+
 ## Usage
 
 ```bash
