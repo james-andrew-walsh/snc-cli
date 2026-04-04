@@ -3,6 +3,7 @@
 import os
 
 from supabase import Client, create_client
+from typing import Optional
 
 _SUPABASE_URL = os.getenv(
     "SUPABASE_URL",
@@ -16,7 +17,7 @@ _SUPABASE_KEY = os.getenv(
     "ODAzNzYwfQ.p1Y083R3ScI5nq3t5C0Z4tLt2ntPxgCAmnRYqbuhNdk",
 )
 
-_client: Client | None = None
+_client: Optional[Client] = None
 
 
 def get_client() -> Client:

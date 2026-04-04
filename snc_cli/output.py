@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import json
 import sys
-from typing import Any
+from typing import Any, Optional, Union
 
 import typer
 
@@ -14,7 +14,7 @@ def print_json(data: Any) -> None:
     typer.echo(json.dumps(data, indent=2, default=str))
 
 
-def print_human(data: dict | list[dict], title: str = "") -> None:
+def print_human(data: Union[dict, list], title: str = "") -> None:
     """Print a human-readable table of *data*."""
     if isinstance(data, dict):
         data = [data]
