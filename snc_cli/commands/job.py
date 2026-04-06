@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 from typing import Optional
 
 import typer
@@ -82,3 +83,42 @@ def update_job(
     if not resp.data:
         abort(f"Job ID {id} not found. Ensure the ID is a valid UUID.")
     output(resp.data[0], human, title="Job Updated")
+
+
+@app.command("delete")
+def delete_job(
+    id: str = typer.Option(..., "--id", help="Job UUID"),
+    force: bool = typer.Option(False, "--force", help="Delete dependent records and the job"),
+) -> None:
+    """Delete a job. Checks for dependent records unless --force is used."""
+    client = get_client()
+
+    dispatches = client.table("DispatchEvent").select("*").eq("jobId", id).execute()
+    crews = client.table("CrewAssignment").select("*").eq("jobId", id).execute()
+    dispatch_count = len(dispatches.data)
+    crew_count = len(crews.data)
+
+    if not force and (dispatch_count > 0 or crew_count > 0):
+        typer.echo(
+            f"Error: Cannot delete job — {dispatch_count} dispatch event(s) "
+            f"and {crew_count} crew assignment(s) reference this job.\n"
+            "Use --force to cancel all dependent records and delete the job."
+        )
+        raise SystemExit(1)
+
+    if dispatch_count > 0:
+        client.table("DispatchEvent").delete().eq("jobId", id).execute()
+    if crew_count > 0:
+        client.table("CrewAssignment").delete().eq("jobId", id).execute()
+
+    resp = client.table("Job").delete().eq("id", id).execute()
+    if not resp.data:
+        abort(f"Job ID {id} not found. Ensure the ID is a valid UUID.")
+
+    result = {
+        "deleted": True,
+        "id": id,
+        "dispatches_removed": dispatch_count,
+        "crew_removed": crew_count,
+    }
+    typer.echo(json.dumps(result, indent=2))
