@@ -42,6 +42,7 @@ def create_job(
     business_unit: str = typer.Option(..., "--business-unit", help="Business unit UUID"),
     code: str = typer.Option(..., "--code", help="Job code"),
     description: str = typer.Option(..., "--description", help="Job description"),
+    location: Optional[str] = typer.Option(None, "--location", help="Location UUID (job site)"),
     human: bool = typer.Option(False, "--human", help="Human-readable output"),
 ) -> None:
     """Create a new job."""
@@ -50,6 +51,8 @@ def create_job(
         "code": code,
         "description": description,
     }
+    if location:
+        payload["locationId"] = location
     resp = get_client().table("Job").upsert(payload, on_conflict="code,businessUnitId").execute()
     if not resp.data:
         abort("Failed to create job.")

@@ -2,7 +2,7 @@
 
 import typer
 
-from snc_cli.commands import business_unit, dispatch, employee, equipment, job, location, telemetry
+from snc_cli.commands import business_unit, crew_assignment, dispatch, employee, equipment, job, location, telemetry
 
 app = typer.Typer(
     name="snc",
@@ -11,6 +11,7 @@ app = typer.Typer(
 )
 
 app.add_typer(business_unit.app)
+app.add_typer(crew_assignment.app)
 app.add_typer(dispatch.app)
 app.add_typer(employee.app)
 app.add_typer(equipment.app)

@@ -16,7 +16,7 @@ app = typer.Typer(name="dispatch", help="Manage dispatch events.")
 @app.command("list")
 def list_dispatches(
     equipment_id: Optional[str] = typer.Option(None, "--equipment-id", help="Filter by equipment UUID"),
-    driver_id: Optional[str] = typer.Option(None, "--driver-id", help="Filter by driver/employee UUID"),
+    operator_id: Optional[str] = typer.Option(None, "--operator-id", help="Filter by operator/employee UUID"),
     job_id: Optional[str] = typer.Option(None, "--job-id", help="Filter by destination job UUID"),
     from_date: Optional[str] = typer.Option(None, "--from-date", help="Filter dispatches from this date (YYYY-MM-DD)"),
     to_date: Optional[str] = typer.Option(None, "--to-date", help="Filter dispatches up to this date (YYYY-MM-DD)"),
@@ -26,8 +26,8 @@ def list_dispatches(
     q = get_client().table("DispatchEvent").select("*")
     if equipment_id:
         q = q.eq("equipmentId", equipment_id)
-    if driver_id:
-        q = q.eq("driverId", driver_id)
+    if operator_id:
+        q = q.eq("operatorId", operator_id)
     if job_id:
         q = q.eq("jobId", job_id)
     if from_date:
@@ -52,30 +52,30 @@ def get_dispatch(
 
 @app.command("schedule")
 def schedule_dispatch(
-    equipment_id: str = typer.Option(..., "--equipment-id", help="Equipment UUID to dispatch"),
-    destination_type: str = typer.Option(..., "--destination-type", help="'job' or 'location'"),
-    destination_id: str = typer.Option(..., "--destination-id", help="UUID of the destination Job or Location"),
-    driver_id: str = typer.Option(..., "--driver-id", help="Employee UUID of the assigned driver"),
-    start_date: str = typer.Option(..., "--start-date", help="Start date (YYYY-MM-DD)"),
-    end_date: Optional[str] = typer.Option(None, "--end-date", help="End date (YYYY-MM-DD, optional)"),
+    equipment: str = typer.Option(..., "--equipment", help="Equipment UUID to dispatch"),
+    job: Optional[str] = typer.Option(None, "--job", help="Destination Job UUID"),
+    location: Optional[str] = typer.Option(None, "--location", help="Destination Location UUID"),
+    operator: str = typer.Option(..., "--operator", help="Employee UUID of the assigned operator"),
+    start: str = typer.Option(..., "--start", help="Start date (YYYY-MM-DD)"),
+    end: Optional[str] = typer.Option(None, "--end", help="End date (YYYY-MM-DD, optional)"),
     notes: Optional[str] = typer.Option(None, "--notes", help="Dispatch notes"),
     human: bool = typer.Option(False, "--human", help="Human-readable output"),
 ) -> None:
     """Schedule a new dispatch event."""
-    if destination_type not in ("job", "location"):
-        abort("--destination-type must be 'job' or 'location'.")
+    if not job and not location:
+        abort("Must provide --job or --location as destination.")
 
     payload: dict = {
-        "equipmentId": equipment_id,
-        "driverId": driver_id,
-        "startDate": start_date,
+        "equipmentId": equipment,
+        "operatorId": operator,
+        "startDate": start,
     }
-    if destination_type == "job":
-        payload["jobId"] = destination_id
-    else:
-        payload["locationId"] = destination_id
-    if end_date:
-        payload["endDate"] = end_date
+    if job:
+        payload["jobId"] = job
+    if location:
+        payload["locationId"] = location
+    if end:
+        payload["endDate"] = end
     if notes:
         payload["notes"] = notes
 
