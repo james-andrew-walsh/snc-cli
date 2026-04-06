@@ -82,6 +82,7 @@ def update_equipment(
     id: str = typer.Option(..., "--id", help="Equipment UUID"),
     is_active: Optional[str] = typer.Option(None, "--is-active", help="Set active (true/false)"),
     is_rental: Optional[str] = typer.Option(None, "--is-rental", help="Set rental (true/false)"),
+    status: Optional[str] = typer.Option(None, "--status", help="Set dispatcher status (Available, In Use, Down)"),
     description: Optional[str] = typer.Option(None, "--description", help="Description"),
     human: bool = typer.Option(False, "--human", help="Human-readable output"),
 ) -> None:
@@ -91,11 +92,15 @@ def update_equipment(
         updates["isActive"] = is_active.lower() == "true"
     if is_rental is not None:
         updates["isRental"] = is_rental.lower() == "true"
+    if status is not None:
+        if status not in ("Available", "In Use", "Down"):
+            abort("--status must be one of: Available, In Use, Down")
+        updates["status"] = status
     if description is not None:
         updates["description"] = description
 
     if not updates:
-        abort("No update fields provided. Use --is-active, --is-rental, or --description.")
+        abort("No update fields provided. Use --is-active, --is-rental, --status, or --description.")
 
     resp = get_client().table("Equipment").update(updates).eq("id", id).execute()
     if not resp.data:
