@@ -5,8 +5,10 @@ from __future__ import annotations
 from typing import Optional
 
 import typer
+from postgrest.exceptions import APIError
 
-from snc_cli.client import get_supabase_client
+from snc_cli.auth import load_credentials
+from snc_cli.client import get_supabase_client, handle_api_error
 from snc_cli.output import abort, output
 
 app = typer.Typer(name="crew-assignment", help="Manage crew assignments to jobs.")
@@ -63,7 +65,11 @@ def assign_crew(
     if notes:
         payload["notes"] = notes
 
-    resp = get_supabase_client().table("CrewAssignment").insert(payload).execute()
+    try:
+        resp = get_supabase_client().table("CrewAssignment").insert(payload).execute()
+    except APIError as e:
+        creds = load_credentials()
+        handle_api_error(e, email=creds.get("email") if creds else None, role=creds.get("role") if creds else None)
     if not resp.data:
         abort("Failed to create crew assignment.")
     output(resp.data[0], human, title="Crew Assignment Created")
@@ -75,7 +81,11 @@ def remove_assignment(
     human: bool = typer.Option(False, "--human", help="Human-readable output"),
 ) -> None:
     """Remove a crew assignment."""
-    resp = get_supabase_client().table("CrewAssignment").delete().eq("id", id).execute()
+    try:
+        resp = get_supabase_client().table("CrewAssignment").delete().eq("id", id).execute()
+    except APIError as e:
+        creds = load_credentials()
+        handle_api_error(e, email=creds.get("email") if creds else None, role=creds.get("role") if creds else None)
     if not resp.data:
         abort(f"Crew Assignment ID {id} not found. Ensure the ID is a valid UUID.")
     output(resp.data[0], human, title="Crew Assignment Removed")

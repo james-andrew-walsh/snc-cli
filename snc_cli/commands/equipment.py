@@ -5,8 +5,10 @@ from __future__ import annotations
 from typing import Optional
 
 import typer
+from postgrest.exceptions import APIError
 
-from snc_cli.client import get_supabase_client
+from snc_cli.auth import load_credentials
+from snc_cli.client import get_supabase_client, handle_api_error
 from snc_cli.output import abort, output
 
 app = typer.Typer(name="equipment", help="Manage equipment.")
@@ -71,7 +73,11 @@ def create_equipment(
     if gps_device_tag is not None:
         payload["gpsDeviceTag"] = gps_device_tag
 
-    resp = get_supabase_client().table("Equipment").upsert(payload, on_conflict="code,businessUnitId").execute()
+    try:
+        resp = get_supabase_client().table("Equipment").upsert(payload, on_conflict="code,businessUnitId").execute()
+    except APIError as e:
+        creds = load_credentials()
+        handle_api_error(e, email=creds.get("email") if creds else None, role=creds.get("role") if creds else None)
     if not resp.data:
         abort("Failed to create equipment.")
     output(resp.data[0], human, title="Equipment Created")
@@ -102,7 +108,11 @@ def update_equipment(
     if not updates:
         abort("No update fields provided. Use --is-active, --is-rental, --status, or --description.")
 
-    resp = get_supabase_client().table("Equipment").update(updates).eq("id", id).execute()
+    try:
+        resp = get_supabase_client().table("Equipment").update(updates).eq("id", id).execute()
+    except APIError as e:
+        creds = load_credentials()
+        handle_api_error(e, email=creds.get("email") if creds else None, role=creds.get("role") if creds else None)
     if not resp.data:
         abort(f"Equipment ID {id} not found. Ensure the ID is a valid UUID.")
     output(resp.data[0], human, title="Equipment Updated")
@@ -115,13 +125,17 @@ def transfer_equipment(
     human: bool = typer.Option(False, "--human", help="Human-readable output"),
 ) -> None:
     """Transfer equipment to another business unit."""
-    resp = (
-        get_supabase_client()
-        .table("Equipment")
-        .update({"businessUnitId": to_business_unit})
-        .eq("id", id)
-        .execute()
-    )
+    try:
+        resp = (
+            get_supabase_client()
+            .table("Equipment")
+            .update({"businessUnitId": to_business_unit})
+            .eq("id", id)
+            .execute()
+        )
+    except APIError as e:
+        creds = load_credentials()
+        handle_api_error(e, email=creds.get("email") if creds else None, role=creds.get("role") if creds else None)
     if not resp.data:
         abort(f"Equipment ID {id} not found. Ensure the ID is a valid UUID.")
     output(resp.data[0], human, title="Equipment Transferred")

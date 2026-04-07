@@ -202,10 +202,52 @@ def logout() -> None:
 
 
 @app.command("whoami")
-def whoami() -> None:
-    """Show the currently logged-in user."""
+def whoami(
+    human: bool = typer.Option(False, "--human", help="Human-readable output"),
+) -> None:
+    """Show the currently logged-in user and their permissions."""
+    import httpx
+
     creds = load_credentials()
     if creds is None:
         typer.echo("Not logged in. Run 'snc login'.")
         raise typer.Exit(code=0)
-    typer.echo(json.dumps({"email": creds.get("email"), "role": creds.get("role")}, indent=2))
+
+    email = creds.get("email", "unknown")
+    role = creds.get("role", "unknown")
+    permissions = None
+
+    # Fetch full profile with permissions from user_profiles.
+    try:
+        resp = httpx.get(
+            f"{SUPABASE_URL}/rest/v1/user_profiles?email=eq.{email}&select=role,permissions",
+            headers={
+                "apikey": SUPABASE_ANON_KEY,
+                "Authorization": f"Bearer {creds['access_token']}",
+            },
+        )
+        if resp.status_code == 200:
+            rows = resp.json()
+            if rows:
+                role = rows[0].get("role", role)
+                permissions = rows[0].get("permissions")
+    except Exception:
+        pass  # Fall back to cached email+role if fetch fails.
+
+    if human:
+        typer.echo(f"Logged in as: {email} ({role})")
+        if permissions and isinstance(permissions, dict):
+            typer.echo("\nPermissions:")
+            max_key_len = max(len(k) for k in permissions)
+            for resource, actions in sorted(permissions.items()):
+                if isinstance(actions, list):
+                    typer.echo(f"  {resource + ':':<{max_key_len + 1}}  {', '.join(actions)}")
+                else:
+                    typer.echo(f"  {resource + ':':<{max_key_len + 1}}  {actions}")
+        elif permissions is None:
+            typer.echo("\nPermissions: not available")
+    else:
+        result: dict = {"email": email, "role": role}
+        if permissions is not None:
+            result["permissions"] = permissions
+        typer.echo(json.dumps(result, indent=2))

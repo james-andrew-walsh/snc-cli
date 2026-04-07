@@ -6,8 +6,10 @@ import json
 from typing import Optional
 
 import typer
+from postgrest.exceptions import APIError
 
-from snc_cli.client import get_supabase_client
+from snc_cli.auth import load_credentials
+from snc_cli.client import get_supabase_client, handle_api_error
 from snc_cli.output import abort, output
 
 app = typer.Typer(name="job", help="Manage jobs.")
@@ -53,7 +55,11 @@ def create_job(
         "description": description,
         "locationId": location,
     }
-    resp = get_supabase_client().table("Job").upsert(payload, on_conflict="code,businessUnitId").execute()
+    try:
+        resp = get_supabase_client().table("Job").upsert(payload, on_conflict="code,businessUnitId").execute()
+    except APIError as e:
+        creds = load_credentials()
+        handle_api_error(e, email=creds.get("email") if creds else None, role=creds.get("role") if creds else None)
     if not resp.data:
         abort("Failed to create job.")
     output(resp.data[0], human, title="Job Created")
@@ -79,7 +85,11 @@ def update_job(
     if not updates:
         abort("No update fields provided. Use --description, --location, or --code.")
 
-    resp = get_supabase_client().table("Job").update(updates).eq("id", id).execute()
+    try:
+        resp = get_supabase_client().table("Job").update(updates).eq("id", id).execute()
+    except APIError as e:
+        creds = load_credentials()
+        handle_api_error(e, email=creds.get("email") if creds else None, role=creds.get("role") if creds else None)
     if not resp.data:
         abort(f"Job ID {id} not found. Ensure the ID is a valid UUID.")
     output(resp.data[0], human, title="Job Updated")
@@ -106,12 +116,16 @@ def delete_job(
         )
         raise SystemExit(1)
 
-    if dispatch_count > 0:
-        client.table("DispatchEvent").delete().eq("jobId", id).execute()
-    if crew_count > 0:
-        client.table("CrewAssignment").delete().eq("jobId", id).execute()
+    try:
+        if dispatch_count > 0:
+            client.table("DispatchEvent").delete().eq("jobId", id).execute()
+        if crew_count > 0:
+            client.table("CrewAssignment").delete().eq("jobId", id).execute()
 
-    resp = client.table("Job").delete().eq("id", id).execute()
+        resp = client.table("Job").delete().eq("id", id).execute()
+    except APIError as e:
+        creds = load_credentials()
+        handle_api_error(e, email=creds.get("email") if creds else None, role=creds.get("role") if creds else None)
     if not resp.data:
         abort(f"Job ID {id} not found. Ensure the ID is a valid UUID.")
 

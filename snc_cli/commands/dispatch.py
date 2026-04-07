@@ -6,8 +6,10 @@ from datetime import date
 from typing import Optional
 
 import typer
+from postgrest.exceptions import APIError
 
-from snc_cli.client import get_supabase_client
+from snc_cli.auth import load_credentials
+from snc_cli.client import get_supabase_client, handle_api_error
 from snc_cli.output import abort, output
 
 app = typer.Typer(name="dispatch", help="Manage dispatch events.")
@@ -79,7 +81,11 @@ def schedule_dispatch(
     if notes:
         payload["notes"] = notes
 
-    resp = get_supabase_client().table("DispatchEvent").insert(payload).execute()
+    try:
+        resp = get_supabase_client().table("DispatchEvent").insert(payload).execute()
+    except APIError as e:
+        creds = load_credentials()
+        handle_api_error(e, email=creds.get("email") if creds else None, role=creds.get("role") if creds else None)
     if not resp.data:
         abort("Failed to schedule dispatch.")
     output(resp.data[0], human, title="Dispatch Scheduled")
@@ -91,7 +97,11 @@ def cancel_dispatch(
     human: bool = typer.Option(False, "--human", help="Human-readable output"),
 ) -> None:
     """Cancel (delete) a dispatch event."""
-    resp = get_supabase_client().table("DispatchEvent").delete().eq("id", id).execute()
+    try:
+        resp = get_supabase_client().table("DispatchEvent").delete().eq("id", id).execute()
+    except APIError as e:
+        creds = load_credentials()
+        handle_api_error(e, email=creds.get("email") if creds else None, role=creds.get("role") if creds else None)
     if not resp.data:
         abort(f"Dispatch Event ID {id} not found. Ensure the ID is a valid UUID.")
     output(resp.data[0], human, title="Dispatch Cancelled")

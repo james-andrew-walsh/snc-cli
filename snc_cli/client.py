@@ -1,8 +1,11 @@
 """Supabase client factory with user JWT injection."""
 
+from __future__ import annotations
+
 import os
 
 import typer
+from postgrest.exceptions import APIError
 from supabase import Client, create_client
 
 from snc_cli.auth import load_credentials, refresh_if_needed
@@ -33,3 +36,26 @@ def get_supabase_client() -> Client:
     client = create_client(_SUPABASE_URL, _SUPABASE_ANON_KEY)
     client.auth.set_session(creds["access_token"], creds["refresh_token"])
     return client
+
+
+def handle_api_error(
+    e: APIError,
+    email: str | None = None,
+    role: str | None = None,
+) -> None:
+    """Translate RLS permission errors into clean user-facing messages.
+
+    For RLS violations (code 42501), prints a friendly error and exits.
+    All other APIErrors are re-raised as-is.
+    """
+    code = getattr(e, "code", None)
+    message = str(e)
+
+    if code == "42501" or "row-level security" in message:
+        typer.echo("Error: Your account does not have permission to perform this operation.")
+        if email and role:
+            typer.echo(f"       Logged in as: {email} ({role})")
+        typer.echo("       Contact your administrator to request access.")
+        raise typer.Exit(code=1)
+
+    raise e
