@@ -31,8 +31,69 @@ app = typer.Typer(name="auth", help="Authentication commands.")
 
 
 @app.command("login")
-def login() -> None:
-    """Log in via browser-based OAuth2 flow."""
+def login(
+    non_interactive: bool = typer.Option(False, "--non-interactive", help="Use password auth instead of browser flow."),
+    email: str = typer.Option(None, "--email", help="Email for non-interactive login."),
+    password: str = typer.Option(None, "--password", help="Password for non-interactive login."),
+) -> None:
+    """Log in via browser-based OAuth2 flow or non-interactive password auth."""
+    if non_interactive:
+        _login_non_interactive(email, password)
+        return
+    _login_interactive()
+
+
+def _login_non_interactive(email: str | None, password: str | None) -> None:
+    """Sign in with email/password (no browser)."""
+    import httpx
+
+    if not email or not password:
+        typer.echo("--email and --password are required with --non-interactive.", err=True)
+        raise typer.Exit(code=1)
+
+    resp = httpx.post(
+        f"{SUPABASE_URL}/auth/v1/token?grant_type=password",
+        headers={
+            "apikey": SUPABASE_ANON_KEY,
+            "Content-Type": "application/json",
+        },
+        json={"email": email, "password": password},
+    )
+
+    if resp.status_code != 200:
+        detail = resp.json().get("error_description", resp.text)
+        typer.echo(f"Login failed: {detail}", err=True)
+        raise typer.Exit(code=1)
+
+    body = resp.json()
+    result: dict = {
+        "access_token": body["access_token"],
+        "refresh_token": body["refresh_token"],
+        "expires_at": int(time.time()) + body.get("expires_in", 3600),
+    }
+
+    # Look up role from user_profiles table.
+    role = "unknown"
+    profiles_resp = httpx.get(
+        f"{SUPABASE_URL}/rest/v1/user_profiles?email=eq.{email}&select=role",
+        headers={
+            "apikey": SUPABASE_ANON_KEY,
+            "Authorization": f"Bearer {result['access_token']}",
+        },
+    )
+    if profiles_resp.status_code == 200:
+        rows = profiles_resp.json()
+        if rows:
+            role = rows[0].get("role", "unknown")
+
+    result["email"] = email
+    result["role"] = role
+    save_credentials(result)
+    typer.echo(f"Logged in as {email} ({role})")
+
+
+def _login_interactive() -> None:
+    """Original browser-based OAuth2 login flow."""
     result: dict = {}
     error: list[str] = []
 
