@@ -6,7 +6,7 @@ from typing import Optional
 
 import typer
 
-from snc_cli.client import get_client
+from snc_cli.client import get_supabase_client
 from snc_cli.output import abort, output
 
 app = typer.Typer(name="telemetry", help="Update equipment telemetry.")
@@ -30,7 +30,7 @@ def update_telemetry(
         abort("Provide at least one of --hour-meter or --odometer.")
 
     resp = (
-        get_client()
+        get_supabase_client()
         .table("Equipment")
         .update(updates)
         .eq("gpsDeviceTag", gps_device_tag)

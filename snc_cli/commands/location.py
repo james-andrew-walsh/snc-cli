@@ -6,7 +6,7 @@ from typing import Optional
 
 import typer
 
-from snc_cli.client import get_client
+from snc_cli.client import get_supabase_client
 from snc_cli.output import abort, output
 
 app = typer.Typer(name="location", help="Manage locations.")
@@ -18,7 +18,7 @@ def list_locations(
     human: bool = typer.Option(False, "--human", help="Human-readable output"),
 ) -> None:
     """List locations, optionally filtered by business unit."""
-    q = get_client().table("Location").select("*")
+    q = get_supabase_client().table("Location").select("*")
     if business_unit:
         q = q.eq("businessUnitId", business_unit)
     resp = q.execute()
@@ -31,7 +31,7 @@ def get_location(
     human: bool = typer.Option(False, "--human", help="Human-readable output"),
 ) -> None:
     """Get a single location by ID."""
-    resp = get_client().table("Location").select("*").eq("id", id).execute()
+    resp = get_supabase_client().table("Location").select("*").eq("id", id).execute()
     if not resp.data:
         abort(f"Location ID {id} not found. Ensure the ID is a valid UUID.")
     output(resp.data[0], human, title="Location")
@@ -50,7 +50,7 @@ def create_location(
         "code": code,
         "description": description,
     }
-    resp = get_client().table("Location").upsert(payload, on_conflict="code,businessUnitId").execute()
+    resp = get_supabase_client().table("Location").upsert(payload, on_conflict="code,businessUnitId").execute()
     if not resp.data:
         abort("Failed to create location.")
     output(resp.data[0], human, title="Location Created")

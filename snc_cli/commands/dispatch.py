@@ -7,7 +7,7 @@ from typing import Optional
 
 import typer
 
-from snc_cli.client import get_client
+from snc_cli.client import get_supabase_client
 from snc_cli.output import abort, output
 
 app = typer.Typer(name="dispatch", help="Manage dispatch events.")
@@ -23,7 +23,7 @@ def list_dispatches(
     human: bool = typer.Option(False, "--human", help="Human-readable output"),
 ) -> None:
     """List dispatch events, optionally filtered."""
-    q = get_client().table("DispatchEvent").select("*")
+    q = get_supabase_client().table("DispatchEvent").select("*")
     if equipment_id:
         q = q.eq("equipmentId", equipment_id)
     if operator_id:
@@ -44,7 +44,7 @@ def get_dispatch(
     human: bool = typer.Option(False, "--human", help="Human-readable output"),
 ) -> None:
     """Get a single dispatch event by ID."""
-    resp = get_client().table("DispatchEvent").select("*").eq("id", id).execute()
+    resp = get_supabase_client().table("DispatchEvent").select("*").eq("id", id).execute()
     if not resp.data:
         abort(f"Dispatch Event ID {id} not found. Ensure the ID is a valid UUID.")
     output(resp.data[0], human, title="Dispatch Event")
@@ -79,7 +79,7 @@ def schedule_dispatch(
     if notes:
         payload["notes"] = notes
 
-    resp = get_client().table("DispatchEvent").insert(payload).execute()
+    resp = get_supabase_client().table("DispatchEvent").insert(payload).execute()
     if not resp.data:
         abort("Failed to schedule dispatch.")
     output(resp.data[0], human, title="Dispatch Scheduled")
@@ -91,7 +91,7 @@ def cancel_dispatch(
     human: bool = typer.Option(False, "--human", help="Human-readable output"),
 ) -> None:
     """Cancel (delete) a dispatch event."""
-    resp = get_client().table("DispatchEvent").delete().eq("id", id).execute()
+    resp = get_supabase_client().table("DispatchEvent").delete().eq("id", id).execute()
     if not resp.data:
         abort(f"Dispatch Event ID {id} not found. Ensure the ID is a valid UUID.")
     output(resp.data[0], human, title="Dispatch Cancelled")

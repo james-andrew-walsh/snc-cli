@@ -6,7 +6,7 @@ from typing import Optional
 
 import typer
 
-from snc_cli.client import get_client
+from snc_cli.client import get_supabase_client
 from snc_cli.output import abort, output
 
 app = typer.Typer(name="crew-assignment", help="Manage crew assignments to jobs.")
@@ -19,7 +19,7 @@ def list_assignments(
     human: bool = typer.Option(False, "--human", help="Human-readable output"),
 ) -> None:
     """List crew assignments, optionally filtered by job or employee."""
-    q = get_client().table("CrewAssignment").select("*")
+    q = get_supabase_client().table("CrewAssignment").select("*")
     if job:
         q = q.eq("jobId", job)
     if employee:
@@ -34,7 +34,7 @@ def get_assignment(
     human: bool = typer.Option(False, "--human", help="Human-readable output"),
 ) -> None:
     """Get a single crew assignment by ID."""
-    resp = get_client().table("CrewAssignment").select("*").eq("id", id).execute()
+    resp = get_supabase_client().table("CrewAssignment").select("*").eq("id", id).execute()
     if not resp.data:
         abort(f"Crew Assignment ID {id} not found. Ensure the ID is a valid UUID.")
     output(resp.data[0], human, title="Crew Assignment")
@@ -63,7 +63,7 @@ def assign_crew(
     if notes:
         payload["notes"] = notes
 
-    resp = get_client().table("CrewAssignment").insert(payload).execute()
+    resp = get_supabase_client().table("CrewAssignment").insert(payload).execute()
     if not resp.data:
         abort("Failed to create crew assignment.")
     output(resp.data[0], human, title="Crew Assignment Created")
@@ -75,7 +75,7 @@ def remove_assignment(
     human: bool = typer.Option(False, "--human", help="Human-readable output"),
 ) -> None:
     """Remove a crew assignment."""
-    resp = get_client().table("CrewAssignment").delete().eq("id", id).execute()
+    resp = get_supabase_client().table("CrewAssignment").delete().eq("id", id).execute()
     if not resp.data:
         abort(f"Crew Assignment ID {id} not found. Ensure the ID is a valid UUID.")
     output(resp.data[0], human, title="Crew Assignment Removed")

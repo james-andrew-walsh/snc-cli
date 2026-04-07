@@ -7,7 +7,7 @@ from typing import Optional
 
 import typer
 
-from snc_cli.client import get_client
+from snc_cli.client import get_supabase_client
 from snc_cli.output import abort, output
 
 app = typer.Typer(name="job", help="Manage jobs.")
@@ -19,7 +19,7 @@ def list_jobs(
     human: bool = typer.Option(False, "--human", help="Human-readable output"),
 ) -> None:
     """List jobs, optionally filtered by business unit."""
-    q = get_client().table("Job").select("*")
+    q = get_supabase_client().table("Job").select("*")
     if business_unit:
         q = q.eq("businessUnitId", business_unit)
     resp = q.execute()
@@ -32,7 +32,7 @@ def get_job(
     human: bool = typer.Option(False, "--human", help="Human-readable output"),
 ) -> None:
     """Get a single job by ID."""
-    resp = get_client().table("Job").select("*").eq("id", id).execute()
+    resp = get_supabase_client().table("Job").select("*").eq("id", id).execute()
     if not resp.data:
         abort(f"Job ID {id} not found. Ensure the ID is a valid UUID.")
     output(resp.data[0], human, title="Job")
@@ -53,7 +53,7 @@ def create_job(
         "description": description,
         "locationId": location,
     }
-    resp = get_client().table("Job").upsert(payload, on_conflict="code,businessUnitId").execute()
+    resp = get_supabase_client().table("Job").upsert(payload, on_conflict="code,businessUnitId").execute()
     if not resp.data:
         abort("Failed to create job.")
     output(resp.data[0], human, title="Job Created")
@@ -79,7 +79,7 @@ def update_job(
     if not updates:
         abort("No update fields provided. Use --description, --location, or --code.")
 
-    resp = get_client().table("Job").update(updates).eq("id", id).execute()
+    resp = get_supabase_client().table("Job").update(updates).eq("id", id).execute()
     if not resp.data:
         abort(f"Job ID {id} not found. Ensure the ID is a valid UUID.")
     output(resp.data[0], human, title="Job Updated")
@@ -91,7 +91,7 @@ def delete_job(
     force: bool = typer.Option(False, "--force", help="Delete dependent records and the job"),
 ) -> None:
     """Delete a job. Checks for dependent records unless --force is used."""
-    client = get_client()
+    client = get_supabase_client()
 
     dispatches = client.table("DispatchEvent").select("*").eq("jobId", id).execute()
     crews = client.table("CrewAssignment").select("*").eq("jobId", id).execute()
