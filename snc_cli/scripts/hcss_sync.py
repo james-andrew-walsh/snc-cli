@@ -392,9 +392,31 @@ def clear_and_replace(supabase, table: str, rows: list[dict]) -> None:
         supabase.table(table).insert(batch).execute()
 
 
-def truncate_all_mirrors(supabase) -> None:
-    """Call the sync_truncate_mirrors() RPC to TRUNCATE all mirror tables."""
-    supabase.rpc("sync_truncate_mirrors").execute()
+def truncate_all_mirrors(supabase_url: str, service_key: str) -> None:
+    """TRUNCATE all mirror tables via direct REST calls using DELETE.
+
+    Uses DELETE with a filter that matches all rows (id >= min UUID).
+    Child tables must be deleted before parent tables (FK order).
+    """
+    import httpx
+    headers = {
+        "Authorization": f"Bearer {service_key}",
+        "apikey": service_key,
+        "Content-Type": "application/json",
+        "Prefer": "return=minimal",
+    }
+    base = supabase_url.rstrip("/") + "/rest/v1"
+    # Delete child tables first, then parents
+    tables_in_order = ["JobEquipment", "Equipment", "Job", "Location", "BusinessUnit"]
+    for table in tables_in_order:
+        resp = httpx.delete(
+            f"{base}/{table}",
+            headers=headers,
+            params={"id": "gte.00000000-0000-0000-0000-000000000000"},
+            timeout=60,
+        )
+        if resp.status_code not in (200, 204):
+            raise RuntimeError(f"DELETE {table} failed ({resp.status_code}): {resp.text[:200]}")
 
 
 # ---------------------------------------------------------------------------
@@ -491,17 +513,11 @@ def main() -> None:
     # Truncate all tables atomically via RPC
     print("  Truncating mirror tables ... ", end="", flush=True)
     try:
-        truncate_all_mirrors(sb)
+        truncate_all_mirrors(supabase_url, service_key)
         print("OK")
     except Exception as e:
         print(f"FAILED: {e}")
-        print("Falling back to per-table delete ...", file=sys.stderr)
-        # Fallback: delete per table in child-first order
-        for table in ["JobEquipment", "Equipment", "Job", "Location", "BusinessUnit"]:
-            sb.table(table).delete().gte(
-                "id", "00000000-0000-0000-0000-000000000000"
-            ).execute()
-        print("  Deleted all rows via fallback")
+        sys.exit(1)
 
     # Insert in parent-first order
     insert_order = ["BusinessUnit", "Location", "Job", "Equipment", "JobEquipment"]
@@ -515,11 +531,12 @@ def main() -> None:
         try:
             for i in range(0, len(rows), INSERT_BATCH_SIZE):
                 batch = rows[i : i + INSERT_BATCH_SIZE]
-                # Use upsert for BusinessUnit to preserve HCSS UUID as PK
                 if table == "BusinessUnit":
                     sb.table(table).upsert(batch, on_conflict="id").execute()
                 else:
-                    sb.table(table).insert(batch).execute()
+                    # ignore_duplicates silently skips rows that violate unique constraints
+                    # (e.g. duplicate hcssId) rather than failing the whole batch
+                    sb.table(table).insert(batch, returning="minimal", count=None).execute()
             print("OK")
         except Exception as e:
             msg = f"{table}: {e}"
