@@ -104,42 +104,77 @@ Value-add tables (NEVER touched by sync):
 - `TelematicsSnapshot` — GPS time-series (future)
 - `ReconciliationRun`, `Anomaly` — reconciliation output (future)
 
-## Current Task: HCSS-001
-**CR:** `core/CHANGE-REQUEST-HCSS-001-HCSS-SYNC-LAYER.md`
+## Completed: HCSS-001 ✅
+- Migration 011 applied (JobEquipment table)
+- `snc_cli/scripts/hcss_sync.py` implemented and verified
+- Counts: 2 BU, 753 Equipment, 236 Jobs, 3,090 Locations, 22,678 JobEquipment
+- Commit: 569aebf
 
-### Step 1: Apply Migration 011
-File to create: `core/supabase/migrations/011_add_job_equipment.sql`
-SQL is in the CR. Apply via Supabase Management API.
+## Current Task: HCSS-003
+**CR:** `/Users/james/.openclaw/workspace/projects/SNC/equipment-tracking/core/CHANGE-REQUEST-HCSS-003-TELEMATICS-SNAPSHOTS.md`
 
-### Step 2: Create Sync Script
-File to create: `snc_cli/scripts/hcss_sync.py`
-- Fetch all 5 tables from HCSS
-- Clear-and-replace each mirror table in a transaction
-- Print summary counts
+Read the full CR before starting.
+
+### Step 1: Apply Migration 012
+File to create: `core/supabase/migrations/012_add_telematics_snapshot.sql`
+
+SQL:
+```sql
+CREATE TABLE IF NOT EXISTS "TelematicsSnapshot" (
+    "id"                          uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+    "equipmentCode"               text NOT NULL,
+    "equipmentHcssId"             uuid,
+    "latitude"                    double precision,
+    "longitude"                   double precision,
+    "locationDateTime"            timestamptz,
+    "isLocationStale"             boolean NOT NULL DEFAULT false,
+    "hourMeterReadingInHours"     double precision,
+    "hourMeterReadingDateTime"    timestamptz,
+    "hourMeterReadingSource"      text,
+    "engineStatus"                text,
+    "engineStatusDateTime"        timestamptz,
+    "snapshotAt"                  timestamptz NOT NULL DEFAULT now(),
+    "createdAt"                   timestamptz NOT NULL DEFAULT now()
+);
+CREATE INDEX ON "TelematicsSnapshot"("equipmentCode");
+CREATE INDEX ON "TelematicsSnapshot"("snapshotAt");
+CREATE INDEX ON "TelematicsSnapshot"("isLocationStale");
+```
+
+Apply via Supabase Management API (SUPABASE_ACCESS_TOKEN env var; User-Agent: curl/8.1.2).
+
+### Step 2: Create `snc_cli/scripts/hcss_telematics_sync.py`
+
+- Auth: HCSS OAuth2 with scope `telematics:read`
+- Fetch: `GET https://api.hcssapps.com/telematics/api/v1/equipment` (all pages)
+- For each record: insert a new row into TelematicsSnapshot (NEVER upsert — append only)
+- Set `isLocationStale = true` if `locationDateTime` is more than 4 hours before `snapshotAt`
+- Look up `equipmentHcssId` from the Equipment table by `equipmentCode` (code field)
+- Use SUPABASE_SERVICE_ROLE_KEY for writes
 - Support `--dry-run` flag
+- Print summary: N snapshots recorded, N stale GPS, duration, errors
+- Same User-Agent header requirement as hcss_sync.py
+
+See `snc_cli/scripts/hcss_sync.py` for the exact patterns to follow (auth, retry, pagination).
 
 ### Verify
 ```bash
-python snc_cli/scripts/hcss_sync.py --dry-run   # should show expected counts
-python snc_cli/scripts/hcss_sync.py              # populate Supabase
+python3 snc_cli/scripts/hcss_telematics_sync.py --dry-run  # show counts
+python3 snc_cli/scripts/hcss_telematics_sync.py            # insert first snapshot batch
+python3 snc_cli/scripts/hcss_telematics_sync.py            # run again — row count should increase
 ```
 
-After sync:
-- Check Equipment count (~900)
-- Check Job count (~235)
-- Check JobEquipment count (large — all active-job authorizations)
-
 ## Definition of Done
-- [ ] Migration 011 applied to Supabase (JobEquipment table exists)
-- [ ] `snc_cli/scripts/hcss_sync.py` exists and runs without errors
-- [ ] `--dry-run` prints expected record counts without writing
-- [ ] Full sync populates all 5 mirror tables
-- [ ] Re-running sync produces same results (idempotent)
+- [ ] Migration 012 applied (TelematicsSnapshot table exists)
+- [ ] `snc_cli/scripts/hcss_telematics_sync.py` created and runs without errors
+- [ ] `--dry-run` shows expected snapshot count (~585 records with GPS)
+- [ ] Full run inserts rows into TelematicsSnapshot
+- [ ] Second run APPENDS new rows (count increases, not stays same)
+- [ ] `isLocationStale` correctly set for machines with stale GPS
 - [ ] All changes committed and pushed to GitHub
 
 ## Do NOT
-- Touch value-add tables (SiteLocation, TelematicsSnapshot, ReconciliationRun, Anomaly)
-- Use upsert for mirror tables — use clear-and-replace (truncate + insert in transaction)
-- Use the `/jobs/{id}/equipment` HeavyJob path — it returns 404
-- Omit the browser User-Agent header on HCSS requests
-- Store credentials in code — use env vars only
+- Upsert or update TelematicsSnapshot — it is append-only, every run adds new rows
+- Delete any rows from TelematicsSnapshot
+- Touch Equipment, Job, Location, BusinessUnit, or JobEquipment tables
+- Store credentials in code — env vars only
