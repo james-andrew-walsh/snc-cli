@@ -272,11 +272,17 @@ Deno.serve(async (_req: Request) => {
     console.log(`Inserted ${newAnomalyCount} new anomaly(ies)`);
 
     // -----------------------------------------------------------------
-    // 9. Update SyncLog entry with final stats + details breakdown
+    // 9. Query total active anomaly counts + update SyncLog
     // -----------------------------------------------------------------
-    const anomalyNoHj = newAnomalies.filter(a => a.anomalyType === "ANOMALY_NO_HJ").length;
-    const disputed = newAnomalies.filter(a => a.anomalyType === "DISPUTED").length;
-    const notInEither = newAnomalies.filter(a => a.anomalyType === "NOT_IN_EITHER").length;
+    const { data: activeCounts } = await sb
+      .from("Anomaly")
+      .select("anomalyType")
+      .is("resolvedAt", null);
+
+    const totalActive = activeCounts?.length ?? 0;
+    const activeNoHj = activeCounts?.filter(a => a.anomalyType === "ANOMALY_NO_HJ").length ?? 0;
+    const activeDisputed = activeCounts?.filter(a => a.anomalyType === "DISPUTED").length ?? 0;
+    const activeNotInEither = activeCounts?.filter(a => a.anomalyType === "NOT_IN_EITHER").length ?? 0;
 
     if (reconciliationRunId) {
       try {
@@ -287,10 +293,12 @@ Deno.serve(async (_req: Request) => {
             durationMs: Date.now() - startTime,
             completedAt: new Date().toISOString(),
             details: {
-              anomaly_no_hj: anomalyNoHj,
-              disputed: disputed,
-              not_in_either: notInEither,
+              new_anomalies: newAnomalyCount,
               resolved: resolvedCount,
+              total_active: totalActive,
+              anomaly_no_hj: activeNoHj,
+              disputed: activeDisputed,
+              not_in_either: activeNotInEither,
             },
           })
           .eq("id", reconciliationRunId);
