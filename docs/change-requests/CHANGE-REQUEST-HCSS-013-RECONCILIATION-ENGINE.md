@@ -152,23 +152,24 @@ async function checkProviderDisagreement(...) { return []; }
 
 ---
 
-## Update: telemetrics-sync/index.ts
+## Scheduling: Two Independent Cron Jobs
 
-After all providers sync successfully, invoke the reconciliation function:
+Do NOT have `telemetrics-sync` trigger `reconciliation` directly. Use two separate cron jobs with a 10-minute offset:
 
-```typescript
-// At end of telemetrics-sync, after SyncLog insert:
-const reconciliationUrl = `${Deno.env.get('SUPABASE_URL')}/functions/v1/reconciliation`;
-await fetch(reconciliationUrl, {
-  method: 'POST',
-  headers: {
-    'Authorization': `Bearer ${Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')}`,
-    'Content-Type': 'application/json',
-  },
-  body: '{}',
-}).catch(err => console.error('Failed to trigger reconciliation:', err));
-// Non-blocking: catch and log but do not throw
-```
+- `telemetrics-sync`: `0 */3 * * *` — fires at 00:00, 03:00, 06:00... UTC
+- `reconciliation`: `10 */3 * * *` — fires at 00:10, 03:10, 06:10... UTC
+
+The 10-minute gap guarantees sync has completed before reconciliation reads `TelematicsSnapshot`. Since sync takes ~2 seconds in practice, 10 minutes is conservative but correct.
+
+**Benefits of this approach:**
+- Each function is independently deployable and debuggable
+- If sync fails, reconciliation still runs against last good data (correct behavior — always reconcile latest available snapshot)
+- Each has its own `SyncLog` entry — clean separation of concerns
+- Changing sync timing does not affect reconciliation timing
+
+Set up the reconciliation cron the same way the telemetrics-sync cron was set up: via the Supabase dashboard pg_cron integration, with the service role key as the Authorization header and `https://ghscnwwatguzmeuabspd.supabase.co/functions/v1/reconciliation` as the URL.
+
+**Do not modify `telemetrics-sync/index.ts`** — it remains unchanged from HCSS-011.
 
 ---
 
@@ -181,9 +182,7 @@ await fetch(reconciliationUrl, {
 
 ## Files to Modify
 
-| File | Change |
-|------|--------|
-| `core/supabase/functions/telemetrics-sync/index.ts` | Invoke reconciliation after sync completes |
+None — `telemetrics-sync` is unchanged. Reconciliation runs on its own cron schedule.
 
 ## Files NOT to Touch
 `get_reconciliation_status()` RPC — keep in place as a debugging/fallback tool. Dashboard migration to read from Anomaly table is handled in HCSS-013b (snc-dashboard).
