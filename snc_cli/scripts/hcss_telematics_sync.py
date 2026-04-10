@@ -1,5 +1,19 @@
 #!/usr/bin/env python3
-"""HCSS Telematics Sync — appends GPS/engine-hour snapshots into Supabase.
+"""
+╔══════════════════════════════════════════════════════════════════════╗
+║  DEPRECATED — Superseded by Supabase Edge Function                 ║
+║                                                                    ║
+║  This script has been replaced by the telemetrics-sync Edge        ║
+║  Function at:                                                      ║
+║    core/supabase/functions/telemetrics-sync/                       ║
+║                                                                    ║
+║  The Edge Function runs on a 3-hour cron schedule and supports     ║
+║  multiple OEM telematics providers (HCSS-010).                     ║
+║                                                                    ║
+║  This file is kept for reference only. Do not use in production.   ║
+╚══════════════════════════════════════════════════════════════════════╝
+
+HCSS Telematics Sync — appends GPS/engine-hour snapshots into Supabase.
 
 Fetches the latest telematics reading for every registered machine from the
 HCSS Telematics API and inserts a new row into TelematicsSnapshot for each.
