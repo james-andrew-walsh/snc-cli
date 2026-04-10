@@ -57,13 +57,32 @@ Deno.serve(async (_req: Request) => {
   // 2. Iterate each enabled provider
   for (const providerRow of providers) {
     const key = providerRow.providerKey as string;
+    const providerName = (providerRow.name as string) ?? key;
     const config = (providerRow.config ?? {}) as Record<string, unknown>;
     const impl = providerRegistry[key];
+    const providerStartTime = Date.now();
 
     if (!impl) {
       const msg = `No implementation found for provider "${key}" — skipping`;
       console.warn(msg);
       results.push({ providerKey: key, inserted: 0, error: msg });
+
+      // Log skipped provider to SyncLog
+      try {
+        await sb.from("SyncLog").insert({
+          providerKey: key,
+          providerName,
+          status: "error",
+          rowsInserted: 0,
+          durationMs: Date.now() - providerStartTime,
+          errorMessage: msg,
+          startedAt: new Date(providerStartTime).toISOString(),
+          completedAt: new Date().toISOString(),
+        });
+      } catch (logErr) {
+        console.error(`  [${key}] SyncLog insert failed:`, logErr);
+      }
+
       continue;
     }
 
@@ -76,6 +95,23 @@ Deno.serve(async (_req: Request) => {
       if (snapshots.length === 0) {
         console.log(`  [${key}] No snapshots returned.`);
         results.push({ providerKey: key, inserted: 0 });
+
+        // Log zero-result sync to SyncLog
+        try {
+          await sb.from("SyncLog").insert({
+            providerKey: key,
+            providerName,
+            status: "success",
+            rowsInserted: 0,
+            durationMs: Date.now() - providerStartTime,
+            errorMessage: null,
+            startedAt: new Date(providerStartTime).toISOString(),
+            completedAt: new Date().toISOString(),
+          });
+        } catch (logErr) {
+          console.error(`  [${key}] SyncLog insert failed:`, logErr);
+        }
+
         continue;
       }
 
@@ -99,10 +135,42 @@ Deno.serve(async (_req: Request) => {
 
       console.log(`  [${key}] Inserted ${inserted} snapshots.`);
       results.push({ providerKey: key, inserted });
+
+      // Log successful sync to SyncLog
+      try {
+        await sb.from("SyncLog").insert({
+          providerKey: key,
+          providerName,
+          status: "success",
+          rowsInserted: inserted,
+          durationMs: Date.now() - providerStartTime,
+          errorMessage: null,
+          startedAt: new Date(providerStartTime).toISOString(),
+          completedAt: new Date().toISOString(),
+        });
+      } catch (logErr) {
+        console.error(`  [${key}] SyncLog insert failed:`, logErr);
+      }
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
       console.error(`  [${key}] Provider sync failed:`, message);
       results.push({ providerKey: key, inserted: 0, error: message });
+
+      // Log failed sync to SyncLog
+      try {
+        await sb.from("SyncLog").insert({
+          providerKey: key,
+          providerName,
+          status: "error",
+          rowsInserted: 0,
+          durationMs: Date.now() - providerStartTime,
+          errorMessage: message,
+          startedAt: new Date(providerStartTime).toISOString(),
+          completedAt: new Date().toISOString(),
+        });
+      } catch (logErr) {
+        console.error(`  [${key}] SyncLog insert failed:`, logErr);
+      }
     }
   }
 
