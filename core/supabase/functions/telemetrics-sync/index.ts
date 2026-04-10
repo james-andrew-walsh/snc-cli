@@ -133,6 +133,10 @@ Deno.serve(async (_req: Request) => {
         }
       }
 
+      // Count fresh vs stale GPS for details
+      const staleCount = snapshots.filter(s => s.isLocationStale).length;
+      const freshCount = snapshots.length - staleCount;
+
       console.log(`  [${key}] Inserted ${inserted} snapshots.`);
       results.push({ providerKey: key, inserted });
 
@@ -147,6 +151,11 @@ Deno.serve(async (_req: Request) => {
           errorMessage: null,
           startedAt: new Date(providerStartTime).toISOString(),
           completedAt: new Date().toISOString(),
+          details: {
+            total: snapshots.length,
+            fresh_gps: freshCount,
+            stale_gps: staleCount,
+          },
         });
       } catch (logErr) {
         console.error(`  [${key}] SyncLog insert failed:`, logErr);

@@ -272,8 +272,12 @@ Deno.serve(async (_req: Request) => {
     console.log(`Inserted ${newAnomalyCount} new anomaly(ies)`);
 
     // -----------------------------------------------------------------
-    // 9. Update SyncLog entry with final stats
+    // 9. Update SyncLog entry with final stats + details breakdown
     // -----------------------------------------------------------------
+    const anomalyNoHj = newAnomalies.filter(a => a.anomalyType === "ANOMALY_NO_HJ").length;
+    const disputed = newAnomalies.filter(a => a.anomalyType === "DISPUTED").length;
+    const notInEither = newAnomalies.filter(a => a.anomalyType === "NOT_IN_EITHER").length;
+
     if (reconciliationRunId) {
       try {
         await sb
@@ -282,6 +286,12 @@ Deno.serve(async (_req: Request) => {
             rowsInserted: newAnomalyCount,
             durationMs: Date.now() - startTime,
             completedAt: new Date().toISOString(),
+            details: {
+              anomaly_no_hj: anomalyNoHj,
+              disputed: disputed,
+              not_in_either: notInEither,
+              resolved: resolvedCount,
+            },
           })
           .eq("id", reconciliationRunId);
       } catch (logErr) {
