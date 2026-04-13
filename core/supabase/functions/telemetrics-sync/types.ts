@@ -15,6 +15,7 @@ export interface TelematicsSnapshotInsert {
   hourMeterReadingSource?: string;
   engineStatus?: string; // "ON" | "OFF" | "IDLE" | "UNKNOWN"
   engineStatusDateTime?: string;
+  engineStatusAt?: string;
   idleHours?: number; // OEM-only field; null for E360
   productiveHours?: number; // OEM-only field; null for E360
   providerKey: string;

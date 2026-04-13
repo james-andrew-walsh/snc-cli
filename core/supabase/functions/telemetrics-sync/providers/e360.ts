@@ -197,6 +197,7 @@ function mapSnapshot(
     hourMeterReadingSource: r.lastHourMeterReadingSource as string | undefined,
     engineStatus: r.lastEngineStatus as string | undefined,
     engineStatusDateTime: r.lastEngineStatusDateTime as string | undefined,
+    engineStatusAt: r.lastEngineStatusDateTime as string | undefined,
     providerKey: "e360",
     snapshotAt: snapshotAt.toISOString(),
   };
