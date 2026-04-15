@@ -18,11 +18,80 @@ async function checkIdleThreshold(): Promise<never[]> {
   return [];
 }
 
-// PROVIDER_DISAGREE: compare E360 and JDLink readings for same machine
-// Stub: log intent, skip — JDLink not yet provisioned
-async function checkProviderDisagreement(): Promise<never[]> {
-  console.log("  [stub] checkProviderDisagreement — skipped (JDLink not provisioned)");
-  return [];
+// PROVIDER_DISAGREE: compare E360 and JDLink readings for same machine.
+// When both providers report for the same equipment, JDLink (direct OEM API)
+// takes precedence over HCSS/E360.
+interface ProviderDisagreement {
+  equipmentCode: string;
+  equipmentHcssId: string | null;
+  e360Hours: number;
+  jdlinkHours: number;
+  hoursDelta: number;
+}
+
+const HOURS_DISAGREE_THRESHOLD = 50; // flag if providers differ by > 50 hours
+
+async function checkProviderDisagreement(
+  sb: ReturnType<typeof createClient>,
+): Promise<ProviderDisagreement[]> {
+  // Get the latest snapshot per equipment per provider (e360 and jdlink only)
+  const { data: snapshots, error } = await sb
+    .from("TelematicsSnapshot")
+    .select("equipmentCode, equipmentHcssId, providerKey, hourMeterReadingInHours, snapshotAt")
+    .in("providerKey", ["e360", "jdlink"])
+    .not("hourMeterReadingInHours", "is", null)
+    .order("snapshotAt", { ascending: false });
+
+  if (error) {
+    console.error("  checkProviderDisagreement query failed:", error.message);
+    return [];
+  }
+
+  if (!snapshots || snapshots.length === 0) {
+    console.log("  checkProviderDisagreement — no dual-provider data available");
+    return [];
+  }
+
+  // Build latest reading per equipment per provider
+  const latest = new Map<string, Map<string, { hours: number; hcssId: string | null }>>();
+
+  for (const s of snapshots) {
+    const code = s.equipmentCode as string;
+    const provider = s.providerKey as string;
+    if (!latest.has(code)) latest.set(code, new Map());
+    const byProvider = latest.get(code)!;
+    // First seen is latest (ordered by snapshotAt DESC)
+    if (!byProvider.has(provider)) {
+      byProvider.set(provider, {
+        hours: s.hourMeterReadingInHours as number,
+        hcssId: s.equipmentHcssId as string | null,
+      });
+    }
+  }
+
+  // Compare equipment that has readings from both providers
+  const disagreements: ProviderDisagreement[] = [];
+  for (const [code, providers] of latest) {
+    const e360 = providers.get("e360");
+    const jdlink = providers.get("jdlink");
+    if (!e360 || !jdlink) continue;
+
+    const delta = Math.abs(e360.hours - jdlink.hours);
+    if (delta > HOURS_DISAGREE_THRESHOLD) {
+      disagreements.push({
+        equipmentCode: code,
+        equipmentHcssId: jdlink.hcssId ?? e360.hcssId,
+        e360Hours: e360.hours,
+        jdlinkHours: jdlink.hours,
+        hoursDelta: delta,
+      });
+    }
+  }
+
+  console.log(
+    `  checkProviderDisagreement — ${latest.size} equipment with dual providers, ${disagreements.length} disagreement(s)`,
+  );
+  return disagreements;
 }
 
 // ---------------------------------------------------------------------------
@@ -155,11 +224,29 @@ Deno.serve(async (_req: Request) => {
     console.log(`Classified ${detected.length} anomaly(ies)`);
 
     // -----------------------------------------------------------------
-    // 4. Run future check stubs
+    // 4. Run additional checks
     // -----------------------------------------------------------------
     await checkHoursMismatch();
     await checkIdleThreshold();
-    await checkProviderDisagreement();
+    const providerDisagreements = await checkProviderDisagreement(sb);
+
+    // Add provider disagreements to detected anomalies.
+    // These don't have a siteLocationId, so we use a synthetic one.
+    for (const d of providerDisagreements) {
+      detected.push({
+        equipmentCode: d.equipmentCode,
+        equipmentHcssId: d.equipmentHcssId,
+        siteLocationId: "00000000-0000-0000-0000-000000000000", // synthetic — not site-bound
+        anomalyType: "PROVIDER_DISAGREE",
+        e360JobCode: null,
+        e360LocationName: equipMap.get(d.equipmentCode)?.locationName ?? null,
+        hjJobCode: (equipToHjJobs.get(d.equipmentCode) ?? [])[0] ?? null,
+        hjJobDescription: null,
+        engineStatus: null,
+        latitude: null,
+        longitude: null,
+      });
+    }
 
     // -----------------------------------------------------------------
     // 5. Load existing active anomalies for dedup + resolution
@@ -283,6 +370,7 @@ Deno.serve(async (_req: Request) => {
     const activeNoHj = activeCounts?.filter(a => a.anomalyType === "ANOMALY_NO_HJ").length ?? 0;
     const activeDisputed = activeCounts?.filter(a => a.anomalyType === "DISPUTED").length ?? 0;
     const activeNotInEither = activeCounts?.filter(a => a.anomalyType === "NOT_IN_EITHER").length ?? 0;
+    const activeProviderDisagree = activeCounts?.filter(a => a.anomalyType === "PROVIDER_DISAGREE").length ?? 0;
 
     if (reconciliationRunId) {
       try {
@@ -299,6 +387,7 @@ Deno.serve(async (_req: Request) => {
               anomaly_no_hj: activeNoHj,
               disputed: activeDisputed,
               not_in_either: activeNotInEither,
+              provider_disagree: activeProviderDisagree,
             },
           })
           .eq("id", reconciliationRunId);

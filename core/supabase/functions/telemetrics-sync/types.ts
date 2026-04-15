@@ -18,6 +18,9 @@ export interface TelematicsSnapshotInsert {
   engineStatusAt?: string;
   idleHours?: number; // OEM-only field; null for E360
   productiveHours?: number; // OEM-only field; null for E360
+  fuelRemainingPercent?: number; // JDLink / ISO 15143-3
+  fuelConsumedLitres?: number; // JDLink / ISO 15143-3
+  defRemainingPercent?: number; // JDLink / ISO 15143-3
   providerKey: string;
   snapshotAt: string;
 }

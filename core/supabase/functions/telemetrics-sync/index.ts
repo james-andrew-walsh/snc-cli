@@ -1,6 +1,7 @@
 import { createClient } from "npm:@supabase/supabase-js@2";
 import type { OEMTelematicsProvider, TelematicsSnapshotInsert } from "./types.ts";
 import { e360Provider } from "./providers/e360.ts";
+import { jdlinkProvider } from "./providers/jdlink.ts";
 
 const INSERT_BATCH_SIZE = 500;
 
@@ -8,6 +9,7 @@ const INSERT_BATCH_SIZE = 500;
 // Add new providers here as they are implemented.
 const providerRegistry: Record<string, OEMTelematicsProvider> = {
   e360: e360Provider,
+  jdlink: jdlinkProvider,
 };
 
 Deno.serve(async (_req: Request) => {
