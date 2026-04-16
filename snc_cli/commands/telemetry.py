@@ -42,3 +42,47 @@ def update_telemetry(
             "Ensure the tag exists on an equipment record."
         )
     output(resp.data[0], human, title="Telemetry Updated")
+
+@app.command("list")
+def list_telemetry(
+    provider: Optional[str] = typer.Option(None, "--provider", help="Filter by provider (e.g. jdlink, e360)"),
+    code: Optional[str] = typer.Option(None, "--code", help="Filter by equipment code"),
+    stale: Optional[bool] = typer.Option(None, "--stale", help="Filter by stale location status"),
+    human: bool = typer.Option(False, "--human", help="Human-readable output"),
+) -> None:
+    """List latest telemetry for equipment, using the get_latest_telematics RPC."""
+    resp = get_supabase_client().rpc("get_latest_telematics").execute()
+    data = resp.data
+    
+    if provider:
+        data = [d for d in data if str(d.get("providerKey") or d.get("providerkey")).lower() == provider.lower()]
+    if code:
+        data = [d for d in data if str(d.get("equipmentCode") or d.get("equipmentcode")).lower() == code.lower()]
+    if stale is not None:
+        data = [d for d in data if (d.get("isLocationStale") if "isLocationStale" in d else d.get("islocationstale")) == stale]
+        
+    output(data, human, title="Latest Telemetry")
+
+@app.command("compare")
+def compare_telemetry(
+    code: str = typer.Option(..., "--code", help="Equipment code to compare across providers"),
+    human: bool = typer.Option(False, "--human", help="Human-readable output"),
+) -> None:
+    """Compare the latest telemetry for a specific equipment across all providers.
+    Bypasses the RPC to show raw underlying snapshot availability."""
+    
+    # Get latest snapshot per provider directly from table
+    resp = get_supabase_client().table("TelematicsSnapshot").select("*").eq("equipmentCode", code).order("snapshotAt", desc=True).execute()
+    data = resp.data
+    
+    if not data:
+        abort(f"No telemetry found for equipment '{code}'")
+        
+    providers = {}
+    for d in data:
+        p = d.get("providerKey") or "unknown"
+        if p not in providers:
+            providers[p] = d
+            
+    output(list(providers.values()), human, title=f"Provider Comparison for '{code}'")
+
